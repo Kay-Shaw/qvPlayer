@@ -44,6 +44,8 @@ public:
 	void resizeEvent(QResizeEvent *e);  //窗口发生变化时
 	void mouseDoubleClickEvent(QMouseEvent*);  //双击全屏
 	void mousePressEvent(QMouseEvent *event);
+    void dragEnterEvent(QDragEnterEvent* e);
+    void dropEvent(QDropEvent* e);
 
 private:
 	void fullShow();
@@ -63,6 +65,7 @@ private slots:
 
 	//菜单
 	void OpenLocalVideo();
+    void PlayLocalVideo(QString filename);
 	void OpenNetStreamDlg();
 	void PopAboutDlg();
 	void GetSourceCode();

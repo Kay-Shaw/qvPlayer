@@ -19,6 +19,8 @@
 #include <QDesktopServices>
 #include <stdio.h>
 #include<fstream>
+#include <QDragEnterEvent>
+#include <QMimeData>
 
 
 using namespace std;
@@ -34,6 +36,7 @@ FFVideoPlayer::FFVideoPlayer(QWidget *parent)
 	: QMainWindow(parent)
 {
 	ui.setupUi(this);
+    this->setAcceptDrops(true);
 
 	m_Hour = 0;
 	m_Min = 0;
@@ -98,7 +101,86 @@ void FFVideoPlayer::allConnect()
 
 	connect(&m_NetDlg, SIGNAL(PushStream(QString)), this, SLOT(slotPushStream(QString)));
 }
+void FFVideoPlayer::PlayLocalVideo(QString filename)
+{
+    string videoPath = string((const char *)filename.toLocal8Bit()); //QString转string
+    int n1 = videoPath.find_last_of('/');
+    int n2 = videoPath.find_last_of('\0');
+    string sname = videoPath.substr(n1 + 1, n2);
+    QString qstr = QString(QString::fromLocal8Bit(sname.c_str())); //string转QString
+    this->setWindowTitle(qstr);
+    if (!QFile::exists(filename)) {
+        QMessageBox::information(this, "err", "file is not exist");
+        return;
+    }
+    int nRet = 0;
+    bool bIsEncryption = EncryptionCheck(filename.toLocal8Bit());
+    if (bIsEncryption)
+    {
+        if (m_strLastFileName != videoPath)
+        {
+            QMessageBox::information(this, "msg", "file decryption, please wait 5s");
+            if (!DecryptionFile(filename.toLocal8Bit()))
+            {
+                QMessageBox::information(this, "err", "decryption file failed,check disk");
+                m_strLastFileName = "";
+                return;
+            }
+            m_strLastFileName = videoPath;
+        }
+        //if (MyFFmpeg::Get()->IsPlaying())
+        //{
+        delete ui.openGLWidget;
+        ui.openGLWidget = nullptr;
+        MyFFmpeg::Get()->Stop();
+        MyFFmpeg::Get()->m_nTotalPlayTime = 0;
+        MyFFmpeg::Get()->m_nCurPlayTime = 0;
 
+        ui.openGLWidget = new VideoWidget(ui.centralWidget);
+        ui.openGLWidget->setObjectName(QString::fromUtf8("openGLWidget"));
+        ui.openGLWidget->move(0, 0);
+        ui.openGLWidget->resize(this->width(), this->height() - 82);
+        ui.openGLWidget->setStyleSheet(QString::fromUtf8(""));
+        ui.openGLWidget->show();
+        //}
+
+        nRet = MyFFmpeg::Get()->Play("cachefile", (void*)this->ui.openGLWidget->winId());
+
+    }
+    else
+    {
+        filename.replace("/", "\\");
+        //if (MyFFmpeg::Get()->IsPlaying())
+        //{
+        delete ui.openGLWidget;
+        ui.openGLWidget = nullptr;
+        MyFFmpeg::Get()->Stop();
+        MyFFmpeg::Get()->m_nTotalPlayTime = 0;
+        MyFFmpeg::Get()->m_nCurPlayTime = 0;
+
+        ui.openGLWidget = new VideoWidget(ui.centralWidget);
+        ui.openGLWidget->setObjectName(QString::fromUtf8("openGLWidget"));
+        ui.openGLWidget->move(0, 0);
+        ui.openGLWidget->resize(this->width(), this->height() - 82);
+        ui.openGLWidget->setStyleSheet(QString::fromUtf8(""));
+        ui.openGLWidget->show();
+
+        //}
+        nRet = MyFFmpeg::Get()->Play(filename.toUtf8(), (void*)this->ui.openGLWidget->winId());
+    }
+    if (-1 == nRet)
+    {
+        QMessageBox::information(this, "err", "open file failed");
+        return;
+    }
+
+    MyFFmpeg::Get()->SetVolume(50);
+    this->ui.sliderVolume->setValue(50);
+
+    g_isPlay = false;
+    slotPlay();
+    fastPlayReset();
+}
 void FFVideoPlayer::OpenLocalVideo()
 {
 	//LOG4CPLUS_INFO(MyLog::getInstance()->logger, "Open Local Video File");
@@ -584,4 +666,21 @@ void FFVideoPlayer::mousePressEvent(QMouseEvent *event)
 		connect(ac1, SIGNAL(triggered()), this, SLOT(OpenLocalVideo()));
 		menu.exec(QCursor::pos());
 	}
+}
+
+void FFVideoPlayer::dragEnterEvent(QDragEnterEvent* e)
+{
+    //对拖放事件进行筛选
+    if (true)
+    {
+        e->acceptProposedAction();	//放行，否则不会执行dropEvent()函数
+    }
+}
+void FFVideoPlayer::dropEvent(QDropEvent* e)
+{
+    //获取文件路径 (QString)
+    QList<QUrl> urls = e->mimeData()->urls();
+    if (urls.isEmpty()) return;
+    QString qStr = urls.first().toLocalFile();
+    PlayLocalVideo(qStr);
 }
